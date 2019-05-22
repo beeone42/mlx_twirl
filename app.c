@@ -22,9 +22,9 @@
 #define	WIN_Y	     800
 #define WIN_TITLE    "mlx"
 
-#define SHAPE_SIZE   80
+#define SHAPE_SIZE   60
 #define SHAPE_THICK  15
-#define WIN_MARGIN   20
+#define WIN_MARGIN   1
 #define WIN_CENTER_X (WIN_X / 2)
 #define WIN_CENTER_Y (WIN_Y / 2)
 #define WIN_SIZE_X   ((WIN_X - SHAPE_SIZE) / 2 - WIN_MARGIN)
@@ -74,7 +74,7 @@ int	close_win(void *p)
 
 int	mouse_win(int button, int x, int y, void *p)
 {
-  first = 0;
+  first++;
   printf("Mouse in Win, button %d at %dx%d.\n", button, x, y);
   return (0);
 }
@@ -91,61 +91,12 @@ int	key_win(int key, void *p)
 
 void init_pal()
 {
-  for (int i = 0; i < 32; i++)
+  for (int i = 0; i < 256; i++)
     {
-      // 0 bleu  (0,0,255) -> violet (255,0,255) 31
-      pal[i].r = i * 8;
-      pal[i].g = 0;
-      pal[i].b = 255;
-
-      // 32 violet ->  rouge 63
-      
-      pal[i + 32].r = 255;
-      pal[i + 32].g = 0;
-      pal[i + 32].b = 255 - (i * 8);
-
-      // 64 rouge (255,0,0) --> orange (255,128,0) 95
-      
-      pal[i + 64].r = 255;
-      pal[i + 64].g = i * 4;
-      pal[i + 64].b = 0;
-
-      // 96 orange (255,128,0) --> jaune (255,255,0) 127
-      
-      pal[i + 96].r = 255;
-      pal[i + 96].g = 128 + i * 4;
-      pal[i + 96].b = 0;
-
-      // 128 jaune (255,255,0) --> blanc (255,255,255) 159
-      
-      pal[i + 128].r = 255;
-      pal[i + 128].g = 255;
-      pal[i + 128].b = i * 8;
-
-      // 160 blanc (255,255,255) --> vert (0,255,0) 191
-      
-      pal[i + 160].r = 255 - (i * 8);
-      pal[i + 160].g = 255;
-      pal[i + 160].b = 255 - (i * 8);
-
-      // 192 vert (0,255,0) -->  bleu ciel (0,255,255) 223
-      
-      pal[i + 192].r = 0;
-      pal[i + 192].g = 255;
-      pal[i + 192].b = i * 8;
-
-      // 224 bleu ciel (0,255,255) --> bleu (0,0,255) 255
-      
-      pal[i + 224].r = 0;
-      pal[i + 224].g = 255 - (i * 8);
-      pal[i + 224].b = 255;
+      pal[i].r = i;
+      pal[i].g = i;
+      pal[i].b = i;
     }
-
-  // noir
-  
-  pal[0].r = 0;
-  pal[0].g = 0;
-  pal[0].b = 0;
 }
 
 void print_pal(int i)
@@ -157,10 +108,17 @@ void blur()
 {
   int c;
 
+  memcpy(buf2, buf, sizeof(buf));
   for (int y = 1; y < (WIN_Y - 1); y++)
-    for (int x = 1; x < (WIN_X - 1); x++)
+    for (int x = 0; x < (WIN_X); x++)
       {
-	P(buf2,x,y) = (P(buf,x-1,y-1) + P(buf,x+1,y-1) + P(buf,x-1,y+1) + P(buf,x+1,y+1)) / 4;
+	c =
+	  P(buf,   x,   y) +
+	  P(buf, x-1,   y) + P(buf, x+1,   y) +
+	  P(buf,   x, y-1) + P(buf,   x, y+1);
+	
+	P(buf2,x,y) = c / 5;
+
       }
   memcpy(buf, buf2, sizeof(buf));
 }
@@ -231,6 +189,24 @@ void trace_circle_epais(int x, int y, int s, int e, int c)
     }
 }
 
+void draw_twirl(int i)
+{
+  int c, d;
+
+  for (int y = 0; y < WIN_Y; y++)
+    {
+      trace_line_h(WIN_X - 128, WIN_X - 1, y, 0); 
+      for (int x = 90; x > 0; x--)
+	{
+	  c = P(buf2, x + (i % 360), y);
+	  d = round(sin((x * M_PI) / 180) * 90) + ((c - 128) / 4);
+	  if (d < 0)
+	    d = 0;
+	  trace_line_h(WIN_X - d, WIN_X - 1, y, c); 
+	}
+    }
+}
+
 int loop(void *param)
 {
   static int	i = 1;
@@ -240,20 +216,20 @@ int loop(void *param)
   if (CLICK_TO_START && (first == 1))
     return (0);
 
-  if (i >= 255)
-    i = 1;
+  if (i >= 360)
+    i = 0;
 
   x = (random() % (WIN_SIZE_X*2)) - WIN_SIZE_X + WIN_CENTER_X;
   y = (random() % (WIN_SIZE_Y*2)) - WIN_SIZE_Y + WIN_CENTER_Y;
     
   //  trace_circle_epais(x, y, SHAPE_SIZE, SHAPE_THICK, i);
-  trace_box(x, y, SHAPE_SIZE, i);
-
-  if (i % 3 == 0)  // blit only every 3 frames
-    {
-      blur();
-      blit(255 - i); // roll palette in sync
-    }
+  if (first == 1)
+    trace_box(x, y, SHAPE_SIZE, (random() % 128) + 128 - 64);
+  if (first == 2)
+    blur();
+  if (first == 3)
+    draw_twirl(i);
+  blit(0);
 
   i++;
   return (0);
@@ -269,6 +245,7 @@ int main(void)
     return (res);
   
   init_pal();
+  memset(buf, 128, sizeof(buf));
   
   mlx_mouse_hook(win, mouse_win, 0);
   mlx_key_hook(win, key_win, 0);
